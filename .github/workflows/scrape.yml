@@ -1,0 +1,78 @@
+name: Scrape CS2 prices
+
+on:
+  push:
+    paths:
+      - '.github/workflows/scrape.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+
+      - name: Clone scraper source
+        run: |
+          git clone --depth 1 https://github.com/eovacius/csgodatabase-scraper.git /tmp/scraper
+          echo "--- scraper tree ---"
+          ls -la /tmp/scraper
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.5'
+
+      - name: Ensure a Chrome binary is available
+        run: |
+          if command -v google-chrome >/dev/null 2>&1; then
+            echo "found google-chrome: $(google-chrome --version)"
+          elif command -v chromium >/dev/null 2>&1; then
+            echo "found chromium: $(chromium --version)"
+          elif command -v chromium-browser >/dev/null 2>&1; then
+            echo "found chromium-browser: $(chromium-browser --version)"
+          else
+            echo "no chrome found, installing"
+            sudo apt-get update
+            sudo apt-get install -y chromium-browser
+          fi
+
+      - name: Run scraper
+        working-directory: /tmp/scraper
+        run: |
+          mkdir -p json
+          rm -f json/*.json
+          go run . --aggressive
+          echo "--- output ---"
+          ls -la json
+
+      - name: Copy result into prices/
+        run: |
+          mkdir -p prices
+          cp /tmp/scraper/json/data_*.json prices/
+          ls -la prices
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cs2-prices-json
+          path: prices/*.json
+          if-no-files-found: error
+
+      - name: Commit and push result
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add prices
+          if git diff --cached --quiet; then
+            echo "nothing changed"
+          else
+            git commit -m "prices: $(date -u '+%Y-%m-%d %H:%M UTC')"
+            git push
+          fi
