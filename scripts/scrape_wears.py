@@ -48,7 +48,24 @@ STEAM = re.compile(r'steamcommunity\.com/market/listings/730/([^"\'<>\s\\]+)')
 MONEY = re.compile(r'\$\s*([0-9][0-9,]*(?:\.[0-9]+)?)')
 SECTIONS = ('skins', 'knives', 'gloves')
 STEAM_SEL = 'a[href*="market/listings/730"]'
-BLOCK = ('image', 'media', 'font', 'stylesheet')
+
+# Globs are matched by the browser itself, so non-matching requests never enter
+# Python. A catch-all route handler is orders of magnitude slower.
+ASSET_GLOBS = (
+    '**/*.{png,jpg,jpeg,gif,webp,avif,svg,ico,css,woff,woff2,ttf,otf,eot,mp4,webm,mp3}',
+    '**/googletagmanager.com/**',
+    '**/google-analytics.com/**',
+    '**/analytics.google.com/**',
+    '**/doubleclick.net/**',
+    '**/googlesyndication.com/**',
+    '**/adservice.google.*/**',
+    '**/adsystem.*/**',
+    '**/facebook.net/**',
+    '**/connect.facebook.*/**',
+    '**/cloudflareinsights.com/**',
+    '**/hotjar.com/**',
+    '**/clarity.ms/**',
+)
 
 ses = requests.Session()
 ses.headers.update({'User-Agent': UA, 'Accept-Language': 'en-US,en;q=0.9'})
@@ -56,6 +73,7 @@ ses.headers.update({'User-Agent': UA, 'Accept-Language': 'en-US,en;q=0.9'})
 RENDER = False
 _local = threading.local()
 _lock = threading.Lock()
+_diag = {'left': 30, 'seen': set()}
 
 
 def fetch_plain(url):
@@ -72,19 +90,41 @@ def fetch_plain(url):
     return ''
 
 
+def _note_request(req):
+    """Log the API calls the page makes, so we can hit them directly later."""
+    try:
+        if req.resource_type not in ('xhr', 'fetch'):
+            return
+        base = req.url.split('?')[0]
+        with _lock:
+            if _diag['left'] <= 0 or base in _diag['seen']:
+                return
+            _diag['seen'].add(base)
+            _diag['left'] -= 1
+            print('  XHR %s %s' % (req.method, req.url[:220]))
+    except Exception:
+        pass
+
+
 def _page():
     """One reusable page per worker thread, with heavy assets blocked."""
     page = getattr(_local, 'page', None)
     if page is None:
         from playwright.sync_api import sync_playwright
         pw = sync_playwright().start()
-        browser = pw.chromium.launch(args=['--no-sandbox', '--disable-dev-shm-usage'])
-        ctx = browser.new_context(user_agent=UA)
-        ctx.route('**/*', lambda route: (
-            route.abort() if route.request.resource_type in BLOCK else route.continue_()
-        ))
+        browser = pw.chromium.launch(args=[
+            '--no-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--disable-extensions',
+            '--blink-settings=imagesEnabled=false',
+        ])
+        ctx = browser.new_context(user_agent=UA, java_script_enabled=True)
+        for glob in ASSET_GLOBS:
+            ctx.route(glob, lambda route: route.abort())
         page = ctx.new_page()
-        page.set_default_timeout(30000)
+        page.set_default_timeout(25000)
+        page.on('request', _note_request)
         _local.pw = pw
         _local.browser = browser
         _local.ctx = ctx
@@ -95,14 +135,20 @@ def _page():
 def fetch_rendered(url):
     try:
         page = _page()
-        page.goto(url, wait_until='domcontentloaded', timeout=45000)
+        page.goto(url, wait_until='commit', timeout=30000)
         try:
-            page.wait_for_selector(STEAM_SEL, timeout=15000)
+            page.wait_for_selector(STEAM_SEL, timeout=12000, state='attached')
         except Exception:
             pass
         return page.content()
     except Exception as exc:
-        print('  ! render %s %s' % (url, exc))
+        print('  ! render %s %s' % (url, str(exc)[:120]))
+        try:
+            _local.ctx.close()
+            _local.browser.close()
+            _local.pw.stop()
+        except Exception:
+            pass
         _local.page = None
         return ''
 
@@ -146,11 +192,11 @@ def slug_variants(name):
 def guess_sections(name):
     low = name.lower()
     if 'gloves' in low or 'hand wraps' in low:
-        return ('gloves', 'skins', 'knives')
+        return ('gloves', 'skins')
     knife_words = ('knife', 'bayonet', 'karambit', 'daggers')
     if any(w in low for w in knife_words):
-        return ('knives', 'skins', 'gloves')
-    return ('skins', 'knives', 'gloves')
+        return ('knives', 'skins')
+    return ('skins',)
 
 
 def load_index():
@@ -181,24 +227,35 @@ def load_items():
     return items
 
 
-def scrape_one(name, index):
+def candidate_urls(name, index):
+    """At most a couple of URLs per item: index hit first, then a guess."""
+    urls = []
     for slug in slug_variants(name):
         secs = (index[slug],) if slug in index else guess_sections(name)
         for sec in secs:
-            html = fetch('%s/%s/%s/' % (BASE, sec, slug))
-            if not html:
-                continue
-            got = parse_prices(html)
-            if got['normal'] or got['stattrak']:
-                got['slug'] = slug
-                got['section'] = sec
-                return got
+            u = '%s/%s/%s/' % (BASE, sec, slug)
+            if u not in urls:
+                urls.append((u, slug, sec))
+    return urls
+
+
+def scrape_one(name, index):
+    for url, slug, sec in candidate_urls(name, index):
+        html = fetch(url)
+        if not html:
+            continue
+        got = parse_prices(html)
+        if got['normal'] or got['stattrak']:
+            got['slug'] = slug
+            got['section'] = sec
+            return got
     return None
 
 
 def save(result, missing, final=False):
     payload = {
-        'generated_at': datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
+        'generated_at': datetime.datetime.now(datetime.timezone.utc)
+        .strftime('%Y-%m-%dT%H:%M:%SZ'),
         'source': 'csgodatabase.com (Steam prices, per wear)',
         'render_mode': RENDER,
         'complete': final,
@@ -231,7 +288,9 @@ def main():
     started = time.time()
 
     def work(name):
+        t0 = time.time()
         got = scrape_one(name, index)
+        dt = time.time() - t0
         with _lock:
             done[0] += 1
             if got:
@@ -239,15 +298,17 @@ def main():
             else:
                 missing.append(name)
             n = done[0]
-            if n % 25 == 0:
+            if n % 10 == 0:
                 rate = n / max(time.time() - started, 1)
                 left = (len(names) - n) / rate / 60 if rate else 0
-                print('  %d/%d ok=%d missing=%d | %.2f items/s | ~%.0f min left'
-                      % (n, len(names), len(result), len(missing), rate, left))
+                print('  %d/%d ok=%d missing=%d | last %.1fs | %.2f items/s '
+                      '| ~%.0f min left'
+                      % (n, len(names), len(result), len(missing), dt, rate, left))
+                sys.stdout.flush()
             if n % 100 == 0:
                 save(dict(result), list(missing))
 
-    workers = WORKERS or (6 if RENDER else 8)
+    workers = WORKERS or (10 if RENDER else 8)
     print('workers: %d' % workers)
     with ThreadPoolExecutor(max_workers=workers) as pool:
         list(pool.map(work, names))
