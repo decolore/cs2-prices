@@ -1,0 +1,94 @@
+{
+ "generated_at": "2026-08-24T02:15:26Z",
+ "source": "csgodatabase.com (Steam prices, per wear)",
+ "render_mode": true,
+ "total": 5,
+ "items": {
+  "AK-47 | Asiimov": {
+   "normal": {
+    "FN": 521.49,
+    "MW": 73.35,
+    "FT": 58.27,
+    "WW": 57.01,
+    "BS": 55.79
+   },
+   "stattrak": {
+    "FN": 826.88,
+    "MW": 166.04,
+    "FT": 86.25,
+    "WW": 109.47,
+    "BS": 90.94
+   },
+   "slug": "ak-47-asiimov",
+   "section": "skins"
+  },
+  "AK-47 | Aquamarine Revenge": {
+   "normal": {
+    "FN": 246.37,
+    "MW": 94.25,
+    "FT": 54.72,
+    "WW": 41.82,
+    "BS": 38.2
+   },
+   "stattrak": {
+    "FN": 373.75,
+    "MW": 282.64,
+    "FT": 117.92,
+    "WW": 77.93,
+    "BS": 78.27
+   },
+   "slug": "ak-47-aquamarine-revenge",
+   "section": "skins"
+  },
+  "AK-47 | Bloodsport": {
+   "normal": {
+    "FN": 247.22,
+    "MW": 215.01,
+    "FT": 183.22,
+    "WW": 170.9
+   },
+   "stattrak": {
+    "FN": 559.18,
+    "MW": 449.99,
+    "FT": 375.01,
+    "WW": 325.3
+   },
+   "slug": "ak-47-bloodsport",
+   "section": "skins"
+  },
+  "AK-47 | Blue Laminate": {
+   "normal": {
+    "FN": 71.9,
+    "MW": 22.57,
+    "FT": 19.91,
+    "WW": 28.24
+   },
+   "stattrak": {
+    "FN": 65.84,
+    "MW": 50.04,
+    "FT": 43.52,
+    "WW": 56.85
+   },
+   "slug": "ak-47-blue-laminate",
+   "section": "skins"
+  },
+  "AK-47 | Cartel": {
+   "normal": {
+    "FN": 94.53,
+    "MW": 29.39,
+    "FT": 22.91,
+    "WW": 26.28,
+    "BS": 19.98
+   },
+   "stattrak": {
+    "FN": 171.76,
+    "MW": 80.0,
+    "FT": 64.12,
+    "WW": 58.41,
+    "BS": 53.45
+   },
+   "slug": "ak-47-cartel",
+   "section": "skins"
+  }
+ }
+}
