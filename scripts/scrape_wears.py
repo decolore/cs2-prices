@@ -12,6 +12,8 @@ Output: prices/wear_prices.json
       }
     }
   }
+
+Partial results are flushed to disk periodically so a timeout still leaves data.
 """
 import json
 import os
@@ -31,6 +33,7 @@ UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
       '(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36')
 CRATES_URL = 'https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/crates.json'
 LIMIT = int(os.environ.get('LIMIT') or 0)
+WORKERS = int(os.environ.get('WORKERS') or 0)
 OUT = pathlib.Path('prices')
 OUT.mkdir(exist_ok=True)
 
@@ -44,6 +47,8 @@ WEAR = {
 STEAM = re.compile(r'steamcommunity\.com/market/listings/730/([^"\'<>\s\\]+)')
 MONEY = re.compile(r'\$\s*([0-9][0-9,]*(?:\.[0-9]+)?)')
 SECTIONS = ('skins', 'knives', 'gloves')
+STEAM_SEL = 'a[href*="market/listings/730"]'
+BLOCK = ('image', 'media', 'font', 'stylesheet')
 
 ses = requests.Session()
 ses.headers.update({'User-Agent': UA, 'Accept-Language': 'en-US,en;q=0.9'})
@@ -67,26 +72,38 @@ def fetch_plain(url):
     return ''
 
 
-def _browser():
-    b = getattr(_local, 'b', None)
-    if b is None:
+def _page():
+    """One reusable page per worker thread, with heavy assets blocked."""
+    page = getattr(_local, 'page', None)
+    if page is None:
         from playwright.sync_api import sync_playwright
         pw = sync_playwright().start()
-        b = pw.chromium.launch(args=['--no-sandbox', '--disable-dev-shm-usage'])
+        browser = pw.chromium.launch(args=['--no-sandbox', '--disable-dev-shm-usage'])
+        ctx = browser.new_context(user_agent=UA)
+        ctx.route('**/*', lambda route: (
+            route.abort() if route.request.resource_type in BLOCK else route.continue_()
+        ))
+        page = ctx.new_page()
+        page.set_default_timeout(30000)
         _local.pw = pw
-        _local.b = b
-    return b
+        _local.browser = browser
+        _local.ctx = ctx
+        _local.page = page
+    return page
 
 
 def fetch_rendered(url):
     try:
-        page = _browser().new_page(user_agent=UA)
-        page.goto(url, wait_until='networkidle', timeout=60000)
-        html = page.content()
-        page.close()
-        return html
+        page = _page()
+        page.goto(url, wait_until='domcontentloaded', timeout=45000)
+        try:
+            page.wait_for_selector(STEAM_SEL, timeout=15000)
+        except Exception:
+            pass
+        return page.content()
     except Exception as exc:
         print('  ! render %s %s' % (url, exc))
+        _local.page = None
         return ''
 
 
@@ -179,6 +196,19 @@ def scrape_one(name, index):
     return None
 
 
+def save(result, missing, final=False):
+    payload = {
+        'generated_at': datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
+        'source': 'csgodatabase.com (Steam prices, per wear)',
+        'render_mode': RENDER,
+        'complete': final,
+        'total': len(result),
+        'items': result,
+    }
+    (OUT / 'wear_prices.json').write_text(json.dumps(payload, ensure_ascii=False, indent=1))
+    (OUT / 'unresolved.json').write_text(json.dumps(sorted(missing), ensure_ascii=False, indent=1))
+
+
 def main():
     global RENDER
     items = load_items()
@@ -198,6 +228,7 @@ def main():
     result = {}
     missing = []
     done = [0]
+    started = time.time()
 
     def work(name):
         got = scrape_one(name, index)
@@ -207,23 +238,23 @@ def main():
                 result[name] = got
             else:
                 missing.append(name)
-            if done[0] % 25 == 0:
-                print('  %d/%d ok=%d missing=%d' % (done[0], len(names), len(result), len(missing)))
+            n = done[0]
+            if n % 25 == 0:
+                rate = n / max(time.time() - started, 1)
+                left = (len(names) - n) / rate / 60 if rate else 0
+                print('  %d/%d ok=%d missing=%d | %.2f items/s | ~%.0f min left'
+                      % (n, len(names), len(result), len(missing), rate, left))
+            if n % 100 == 0:
+                save(dict(result), list(missing))
 
-    workers = 3 if RENDER else 6
+    workers = WORKERS or (6 if RENDER else 8)
+    print('workers: %d' % workers)
     with ThreadPoolExecutor(max_workers=workers) as pool:
         list(pool.map(work, names))
 
-    payload = {
-        'generated_at': datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
-        'source': 'csgodatabase.com (Steam prices, per wear)',
-        'render_mode': RENDER,
-        'total': len(result),
-        'items': result,
-    }
-    (OUT / 'wear_prices.json').write_text(json.dumps(payload, ensure_ascii=False, indent=1))
-    (OUT / 'unresolved.json').write_text(json.dumps(sorted(missing), ensure_ascii=False, indent=1))
-    print('DONE ok=%d missing=%d' % (len(result), len(missing)))
+    save(result, missing, final=True)
+    print('DONE ok=%d missing=%d in %.1f min'
+          % (len(result), len(missing), (time.time() - started) / 60))
     if not result:
         sys.exit(1)
 

@@ -7,6 +7,10 @@ on:
         description: 'Max items to scrape (0 = all)'
         required: false
         default: '0'
+      workers:
+        description: 'Parallel browser workers (rendered mode)'
+        required: false
+        default: '6'
   schedule:
     - cron: '0 4 * * *'
 
@@ -16,7 +20,7 @@ permissions:
 jobs:
   wears:
     runs-on: ubuntu-latest
-    timeout-minutes: 240
+    timeout-minutes: 350
     steps:
       - uses: actions/checkout@v4
 
@@ -37,16 +41,19 @@ jobs:
       - name: Scrape
         env:
           LIMIT: ${{ github.event.inputs.limit }}
+          WORKERS: ${{ github.event.inputs.workers }}
         run: python scripts/scrape_wears.py
 
       - name: Upload artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: wear-prices
           path: prices/*.json
-          if-no-files-found: error
+          if-no-files-found: warn
 
       - name: Commit result
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
