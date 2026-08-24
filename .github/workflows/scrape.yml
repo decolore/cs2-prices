@@ -19,29 +19,32 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Clone scraper source
-        run: |
-          git clone --depth 1 https://github.com/eovacius/csgodatabase-scraper.git /tmp/scraper
-          echo "--- scraper tree ---"
-          ls -la /tmp/scraper
+        run: git clone --depth 1 https://github.com/eovacius/csgodatabase-scraper.git /tmp/scraper
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.25.5'
 
-      - name: Ensure a Chrome binary is available
+      - name: Make Chrome usable in CI
         run: |
-          if command -v google-chrome >/dev/null 2>&1; then
-            echo "found google-chrome: $(google-chrome --version)"
-          elif command -v chromium >/dev/null 2>&1; then
-            echo "found chromium: $(chromium --version)"
-          elif command -v chromium-browser >/dev/null 2>&1; then
-            echo "found chromium-browser: $(chromium-browser --version)"
-          else
-            echo "no chrome found, installing"
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser)"
+          if [ -z "$CHROME" ]; then
             sudo apt-get update
             sudo apt-get install -y chromium-browser
+            CHROME="$(command -v chromium-browser)"
           fi
+          echo "real chrome binary: $CHROME"
+          "$CHROME" --version || true
+          sudo tee /usr/local/bin/headless_shell >/dev/null <<EOF
+          #!/bin/sh
+          exec "$CHROME" --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-setuid-sandbox "\$@"
+          EOF
+          sudo chmod +x /usr/local/bin/headless_shell
+          echo "wrapper:"
+          cat /usr/local/bin/headless_shell
+          headless_shell --version
 
       - name: Run scraper
         working-directory: /tmp/scraper
