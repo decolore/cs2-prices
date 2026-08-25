@@ -1,10 +1,12 @@
-"""Scrape real per-wear prices for the few items the free feed capped at $1800.
+"""Scrape real per-wear prices for the items the free feed capped at $1800.
 
-Only 20 pages are requested, so csgodatabase does not trigger Cloudflare here.
-For every marketplace link on a page we decode the item name out of the href,
+Plain HTTP requests from GitHub runners get an instant Cloudflare 403, so every
+page is opened in a real Chromium instance instead. Only 20 pages are visited,
+well below the volume that made the earlier bulk scrape get challenged.
+
+For each marketplace link on a page we decode the item name out of the href,
 which tells us the wear and whether it is StatTrak, then keep the lowest price
-seen for that combination - the same 'lowest price by variant' number the site
-shows at the top of each page.
+seen - the same 'lowest price by variant' figure the site shows at the top.
 """
 import functools
 import json
@@ -15,16 +17,17 @@ import sys
 import time
 import urllib.parse
 
-import requests
+from playwright.sync_api import sync_playwright
 
 print = functools.partial(print, flush=True)  # noqa: A001 - CI needs live logs
 
 BASE = 'https://www.csgodatabase.com/skins/'
 OUT = pathlib.Path('prices')
-TIMEOUT = 20
+NAV_TIMEOUT = 60_000
+SEL_TIMEOUT = 25_000
+PRICE_SEL = 'a[href*="Factory%20New"], a[href*="factory-new"], a[href*="market/listings/730"]'
 ATTEMPTS = 2
 
-# items whose feed price hit the 1800.00 ceiling, with the values we must replace
 ITEMS = [
     '\u2605 M9 Bayonet | Ultraviolet',
     '\u2605 M9 Bayonet | Doppler',
@@ -56,16 +59,10 @@ WEARS = {
     'Battle-Scarred': 'BS',
 }
 
-HEADERS = {
-    'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-                   '(KHTML, like Gecko) Chrome/126.0 Safari/537.36'),
-    'Accept': 'text/html,application/xhtml+xml',
-    'Accept-Language': 'en-US,en;q=0.9',
-}
-
 ANCHOR = re.compile(r'<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>', re.S | re.I)
 MONEY = re.compile(r'\$\s*([0-9][0-9,]*(?:\.[0-9]+)?)')
 TAGS = re.compile(r'<[^>]+>')
+BLOCK_GLOBS = ('**/*.{png,jpg,jpeg,gif,webp,svg,ico,woff,woff2,ttf,mp4}',)
 
 
 def slug(name):
@@ -78,15 +75,13 @@ def parse(html):
     """Lowest price per variant/wear across every marketplace link on the page."""
     found = {'normal': {}, 'stattrak': {}}
     for href, inner in ANCHOR.findall(html):
-        text = TAGS.sub(' ', inner)
-        money = MONEY.search(text)
+        money = MONEY.search(TAGS.sub(' ', inner))
         if not money:
             continue
         price = float(money.group(1).replace(',', ''))
         if price <= 0:
             continue
-        target = urllib.parse.unquote(href)
-        low = target.lower()
+        low = urllib.parse.unquote(href).lower()
         wear = None
         for label, key in WEARS.items():
             if label.lower() in low or label.lower().replace(' ', '-') in low:
@@ -101,51 +96,87 @@ def parse(html):
     return found
 
 
-def fetch(url):
-    for attempt in range(1, ATTEMPTS + 1):
-        started = time.time()
+def new_context(browser):
+    ctx = browser.new_context(
+        viewport={'width': 1280, 'height': 900},
+        locale='en-US',
+        user_agent=('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+                    '(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'),
+    )
+    for glob in BLOCK_GLOBS:
+        ctx.route(glob, lambda route: route.abort())
+    return ctx
+
+
+def scrape_one(ctx, url):
+    page = ctx.new_page()
+    page.set_default_timeout(SEL_TIMEOUT)
+    try:
+        page.goto(url, wait_until='domcontentloaded', timeout=NAV_TIMEOUT)
         try:
-            r = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
-            took = time.time() - started
-            print('   http %s in %.1fs (%d bytes)' % (r.status_code, took, len(r.content)))
-            if r.status_code == 200 and 'Lowest' in r.text:
-                return r.text
-            if r.status_code in (403, 503):
-                print('   looks like a Cloudflare challenge')
-        except Exception as exc:
-            print('   error after %.1fs: %s' % (time.time() - started, exc))
-        if attempt < ATTEMPTS:
-            time.sleep(4)
-    return None
+            page.wait_for_selector(PRICE_SEL, timeout=SEL_TIMEOUT, state='attached')
+        except Exception:
+            print('   price links did not appear, parsing whatever loaded')
+        return page.content()
+    finally:
+        page.close()
 
 
 def main():
     OUT.mkdir(exist_ok=True)
     result, missing = {}, []
     started = time.time()
-    for i, name in enumerate(ITEMS, 1):
-        url = BASE + slug(name) + '/'
-        print('[%2d/%d] %s' % (i, len(ITEMS), url))
-        html = fetch(url)
-        if not html:
-            missing.append(name)
-        else:
-            prices = parse(html)
-            if prices['normal'] or prices['stattrak']:
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(args=[
+            '--no-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--disable-extensions',
+            '--blink-settings=imagesEnabled=false',
+        ])
+        ctx = new_context(browser)
+
+        for i, name in enumerate(ITEMS, 1):
+            url = BASE + slug(name) + '/'
+            print('[%2d/%d] %s' % (i, len(ITEMS), url))
+            prices = None
+            for attempt in range(1, ATTEMPTS + 1):
+                try:
+                    html = scrape_one(ctx, url)
+                except Exception as exc:
+                    print('   attempt %d failed: %s' % (attempt, exc))
+                    ctx.close()
+                    ctx = new_context(browser)
+                    continue
+                if 'challenge-platform' in html and '$' not in html:
+                    print('   attempt %d hit a Cloudflare challenge' % attempt)
+                    time.sleep(10)
+                    continue
+                candidate = parse(html)
+                if candidate['normal'] or candidate['stattrak']:
+                    prices = candidate
+                    break
+                print('   attempt %d parsed no prices (%d bytes)' % (attempt, len(html)))
+
+            if prices:
                 result[name] = prices
                 print('   normal   %s' % prices['normal'])
                 print('   stattrak %s' % prices['stattrak'])
             else:
-                print('   page loaded but no prices parsed')
                 missing.append(name)
-        # save after every page so a timeout still leaves usable data
-        payload = {'source': 'csgodatabase.com lowest price per variant',
-                   'items': result, 'missing': missing}
-        (OUT / 'capped_fix.json').write_text(
-            json.dumps(payload, ensure_ascii=False, indent=1), encoding='utf-8')
-        print('   elapsed %.0fs | ok %d | missing %d' % (time.time() - started, len(result), len(missing)))
-        if i < len(ITEMS):
-            time.sleep(random.uniform(1.5, 3.0))
+
+            payload = {'source': 'csgodatabase.com lowest price per variant',
+                       'items': result, 'missing': missing}
+            (OUT / 'capped_fix.json').write_text(
+                json.dumps(payload, ensure_ascii=False, indent=1), encoding='utf-8')
+            print('   elapsed %.0fs | ok %d | missing %d'
+                  % (time.time() - started, len(result), len(missing)))
+            if i < len(ITEMS):
+                time.sleep(random.uniform(2.0, 4.0))
+
+        ctx.close()
+        browser.close()
 
     print('\nresolved: %d / %d | missing: %s' % (len(result), len(ITEMS), missing))
     print('--- copy everything below this line ---')
