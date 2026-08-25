@@ -1,26 +1,270 @@
 {
  "source": "csgodatabase.com lowest price per variant",
- "items": {},
- "missing": [
-  "★ M9 Bayonet | Ultraviolet",
-  "★ M9 Bayonet | Doppler",
-  "★ M9 Bayonet | Night",
-  "★ Karambit | Fade",
-  "★ Karambit | Night",
-  "★ Karambit | Autotronic",
-  "★ Karambit | Slaughter",
-  "★ Butterfly Knife | Doppler",
-  "★ Butterfly Knife | Case Hardened",
-  "★ Butterfly Knife | Marble Fade",
-  "★ Butterfly Knife | Slaughter",
-  "★ Butterfly Knife | Gamma Doppler",
-  "★ Huntsman Knife | Night",
-  "★ Huntsman Knife | Forest DDPAT",
-  "★ Bowie Knife | Crimson Web",
-  "★ Flip Knife | Crimson Web",
-  "★ Nomad Knife | Urban Masked",
-  "★ Driver Gloves | Crimson Weave",
-  "★ Driver Gloves | Black Tie",
-  "★ Sport Gloves | Hedge Maze"
- ]
+ "items": {
+  "★ M9 Bayonet | Ultraviolet": {
+   "normal": {
+    "FN": 1561.93,
+    "MW": 445.22,
+    "FT": 338.46,
+    "WW": 322.74,
+    "BS": 304.91
+   },
+   "stattrak": {
+    "FN": 1789.87,
+    "MW": 495.0,
+    "FT": 334.21,
+    "WW": 377.41,
+    "BS": 339.9
+   }
+  },
+  "★ M9 Bayonet | Doppler": {
+   "normal": {
+    "FN": 898.98,
+    "MW": 977.36
+   },
+   "stattrak": {
+    "FN": 936.0,
+    "MW": 1019.99
+   }
+  },
+  "★ M9 Bayonet | Night": {
+   "normal": {
+    "FN": 1151.99,
+    "MW": 414.97,
+    "FT": 314.83,
+    "WW": 319.41,
+    "BS": 312.28
+   },
+   "stattrak": {
+    "FN": 1515.45,
+    "MW": 514.7,
+    "FT": 336.83,
+    "WW": 343.29,
+    "BS": 342.31
+   }
+  },
+  "★ Karambit | Fade": {
+   "normal": {
+    "FN": 1823.89,
+    "MW": 1833.64
+   },
+   "stattrak": {
+    "FN": 1816.67,
+    "MW": 2282.93
+   }
+  },
+  "★ Karambit | Night": {
+   "normal": {
+    "FN": 1738.59,
+    "MW": 586.61,
+    "FT": 462.92,
+    "WW": 462.4,
+    "BS": 440.35
+   },
+   "stattrak": {
+    "FN": 2385.07,
+    "MW": 650.99,
+    "FT": 487.41,
+    "WW": 554.68,
+    "BS": 470.01
+   }
+  },
+  "★ Karambit | Autotronic": {
+   "normal": {
+    "FN": 1635.0,
+    "MW": 1075.82,
+    "FT": 865.93,
+    "WW": 844.39,
+    "BS": 670.14
+   },
+   "stattrak": {
+    "FN": 1697.85,
+    "MW": 1082.4,
+    "FT": 865.68,
+    "WW": 847.4,
+    "BS": 728.36
+   }
+  },
+  "★ Karambit | Slaughter": {
+   "normal": {
+    "FN": 1089.16,
+    "MW": 896.55,
+    "FT": 860.52
+   },
+   "stattrak": {
+    "FN": 1275.58,
+    "MW": 970.16,
+    "FT": 928.99
+   }
+  },
+  "★ Butterfly Knife | Doppler": {
+   "normal": {
+    "FN": 1850.17,
+    "MW": 2086.49
+   },
+   "stattrak": {
+    "FN": 2149.98,
+    "MW": 2390.0
+   }
+  },
+  "★ Butterfly Knife | Case Hardened": {
+   "normal": {
+    "FN": 1245.9,
+    "MW": 833.57,
+    "FT": 681.62,
+    "WW": 624.41,
+    "BS": 594.67
+   },
+   "stattrak": {
+    "FN": 1534.25,
+    "MW": 979.9,
+    "FT": 759.97,
+    "WW": 764.69,
+    "BS": 740.83
+   }
+  },
+  "★ Butterfly Knife | Marble Fade": {
+   "normal": {
+    "FN": 1329.59,
+    "MW": 1375.0
+   },
+   "stattrak": {
+    "FN": 1408.05,
+    "MW": 1775.35
+   }
+  },
+  "★ Butterfly Knife | Slaughter": {
+   "normal": {
+    "FN": 1335.74,
+    "MW": 1190.9,
+    "FT": 1116.68
+   },
+   "stattrak": {
+    "FN": 1639.62,
+    "MW": 1292.68,
+    "FT": 1222.05
+   }
+  },
+  "★ Butterfly Knife | Gamma Doppler": {
+   "normal": {
+    "FN": 1785.98,
+    "MW": 1840.34
+   },
+   "stattrak": {
+    "FN": 1785.97,
+    "MW": 1675.42
+   }
+  },
+  "★ Huntsman Knife | Night": {
+   "normal": {
+    "FN": 821.0,
+    "MW": 130.41,
+    "FT": 64.38,
+    "WW": 76.61,
+    "BS": 64.61
+   },
+   "stattrak": {
+    "FN": 1071.67,
+    "MW": 154.47,
+    "FT": 80.63,
+    "WW": 123.04,
+    "BS": 85.1
+   }
+  },
+  "★ Huntsman Knife | Forest DDPAT": {
+   "normal": {
+    "FN": 295.0,
+    "MW": 70.76,
+    "FT": 49.9,
+    "WW": 55.68,
+    "BS": 48.99
+   },
+   "stattrak": {
+    "FN": 397.93,
+    "MW": 72.88,
+    "FT": 61.8,
+    "WW": 69.74,
+    "BS": 61.36
+   }
+  },
+  "★ Bowie Knife | Crimson Web": {
+   "normal": {
+    "FN": 1903.84,
+    "MW": 182.08,
+    "FT": 92.25,
+    "WW": 96.11,
+    "BS": 173.91
+   },
+   "stattrak": {
+    "FN": 1726.66,
+    "MW": 195.99,
+    "FT": 115.57,
+    "WW": 126.33,
+    "BS": 178.35
+   }
+  },
+  "★ Flip Knife | Crimson Web": {
+   "normal": {
+    "FN": 1143.87,
+    "MW": 256.73,
+    "FT": 167.4,
+    "WW": 181.14,
+    "BS": 151.51
+   },
+   "stattrak": {
+    "FN": 1507.16,
+    "MW": 311.13,
+    "FT": 183.69,
+    "WW": 182.96,
+    "BS": 166.44
+   }
+  },
+  "★ Nomad Knife | Urban Masked": {
+   "normal": {
+    "FN": 204.99,
+    "MW": 105.63,
+    "FT": 86.3,
+    "WW": 87.09,
+    "BS": 79.02
+   },
+   "stattrak": {
+    "FN": 240.22,
+    "MW": 130.65,
+    "FT": 100.22,
+    "WW": 99.61,
+    "BS": 95.67
+   }
+  },
+  "★ Driver Gloves | Crimson Weave": {
+   "normal": {
+    "FN": 2307.43,
+    "MW": 1405.65,
+    "FT": 1335.05,
+    "WW": 255.98,
+    "BS": 137.87
+   },
+   "stattrak": {}
+  },
+  "★ Driver Gloves | Black Tie": {
+   "normal": {
+    "FN": 1205.3,
+    "MW": 281.81,
+    "FT": 114.1,
+    "WW": 102.82,
+    "BS": 87.89
+   },
+   "stattrak": {}
+  },
+  "★ Sport Gloves | Hedge Maze": {
+   "normal": {
+    "FN": 27209.71,
+    "MW": 7201.53,
+    "FT": 1874.38,
+    "WW": 3058.79,
+    "BS": 2211.83
+   },
+   "stattrak": {}
+  }
+ },
+ "missing": []
 }
