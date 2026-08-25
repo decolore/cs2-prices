@@ -9,6 +9,8 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: write
+    env:
+      PYTHONUNBUFFERED: '1'
     steps:
       - uses: actions/checkout@v4
 
@@ -20,7 +22,7 @@ jobs:
         run: pip install requests
 
       - name: Scrape capped items
-        run: python scripts/fix_capped.py
+        run: python -u scripts/fix_capped.py
 
       - name: Upload result
         if: always()

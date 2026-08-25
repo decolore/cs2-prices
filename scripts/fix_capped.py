@@ -6,6 +6,7 @@ which tells us the wear and whether it is StatTrak, then keep the lowest price
 seen for that combination - the same 'lowest price by variant' number the site
 shows at the top of each page.
 """
+import functools
 import json
 import pathlib
 import random
@@ -16,8 +17,12 @@ import urllib.parse
 
 import requests
 
+print = functools.partial(print, flush=True)  # noqa: A001 - CI needs live logs
+
 BASE = 'https://www.csgodatabase.com/skins/'
 OUT = pathlib.Path('prices')
+TIMEOUT = 20
+ATTEMPTS = 2
 
 # items whose feed price hit the 1800.00 ceiling, with the values we must replace
 ITEMS = [
@@ -97,46 +102,54 @@ def parse(html):
 
 
 def fetch(url):
-    for attempt in range(3):
+    for attempt in range(1, ATTEMPTS + 1):
+        started = time.time()
         try:
-            r = requests.get(url, headers=HEADERS, timeout=45)
+            r = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
+            took = time.time() - started
+            print('   http %s in %.1fs (%d bytes)' % (r.status_code, took, len(r.content)))
             if r.status_code == 200 and 'Lowest' in r.text:
                 return r.text
-            print('   status %s (attempt %s)' % (r.status_code, attempt + 1))
+            if r.status_code in (403, 503):
+                print('   looks like a Cloudflare challenge')
         except Exception as exc:
-            print('   error %s (attempt %s)' % (exc, attempt + 1))
-        time.sleep(5 + attempt * 5)
+            print('   error after %.1fs: %s' % (time.time() - started, exc))
+        if attempt < ATTEMPTS:
+            time.sleep(4)
     return None
 
 
 def main():
     OUT.mkdir(exist_ok=True)
     result, missing = {}, []
+    started = time.time()
     for i, name in enumerate(ITEMS, 1):
         url = BASE + slug(name) + '/'
         print('[%2d/%d] %s' % (i, len(ITEMS), url))
         html = fetch(url)
         if not html:
             missing.append(name)
-            continue
-        prices = parse(html)
-        if not prices['normal'] and not prices['stattrak']:
-            print('   no prices parsed')
-            missing.append(name)
-            continue
-        result[name] = prices
-        print('   normal %s' % prices['normal'])
-        print('   stattrak %s' % prices['stattrak'])
-        time.sleep(random.uniform(2.0, 4.0))
-
-    payload = {'source': 'csgodatabase.com lowest price per variant',
-               'items': result, 'missing': missing}
-    path = OUT / 'capped_fix.json'
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=1), encoding='utf-8')
+        else:
+            prices = parse(html)
+            if prices['normal'] or prices['stattrak']:
+                result[name] = prices
+                print('   normal   %s' % prices['normal'])
+                print('   stattrak %s' % prices['stattrak'])
+            else:
+                print('   page loaded but no prices parsed')
+                missing.append(name)
+        # save after every page so a timeout still leaves usable data
+        payload = {'source': 'csgodatabase.com lowest price per variant',
+                   'items': result, 'missing': missing}
+        (OUT / 'capped_fix.json').write_text(
+            json.dumps(payload, ensure_ascii=False, indent=1), encoding='utf-8')
+        print('   elapsed %.0fs | ok %d | missing %d' % (time.time() - started, len(result), len(missing)))
+        if i < len(ITEMS):
+            time.sleep(random.uniform(1.5, 3.0))
 
     print('\nresolved: %d / %d | missing: %s' % (len(result), len(ITEMS), missing))
     print('--- copy everything below this line ---')
-    print(json.dumps(payload, ensure_ascii=False))
+    print(json.dumps({'items': result, 'missing': missing}, ensure_ascii=False))
     print('--- end ---')
     if not result:
         sys.exit(1)
