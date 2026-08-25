@@ -1,0 +1,40 @@
+name: Fix capped prices
+
+on:
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Scrape capped items
+        run: python scripts/fix_capped.py
+
+      - name: Upload result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capped-fix
+          path: prices/capped_fix.json
+          if-no-files-found: warn
+
+      - name: Commit result
+        if: always()
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add prices/capped_fix.json || true
+          git commit -m 'update capped price fixes' || echo 'nothing to commit'
+          git push || echo 'nothing to push'
